@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-sp-mode="scroll">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工作量计算器</title>
+<style>
+  :root {
+    --glass-bg: rgba(255, 255, 255, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.65);
+    --text: #1e2340;
+    --text-soft: #5a6080;
+    --accent: #6366f1;
+    --accent-2: #a855f7;
+    --accent-3: #ec4899;
+    --ok: #10b981;
+    --warn: #f59e0b;
+    --radius: 22px;
+    --shadow: 0 8px 32px rgba(80, 70, 180, 0.18);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, "Segoe UI", sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    background: linear-gradient(135deg, #e0e7ff 0%, #fce7f3 50%, #ddd6fe 100%);
+    overflow-x: hidden;
+  }
+
+  /* ---- 动态背景 ---- */
+  .bg-blobs { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+  .blob {
+    position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.55;
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  .blob-1 { width: 46vmax; height: 46vmax; left: -14vmax; top: -14vmax; background: radial-gradient(circle, #818cf8, transparent 70%); }
+  .blob-2 { width: 40vmax; height: 40vmax; right: -12vmax; top: 22vh; background: radial-gradient(circle, #f472b6, transparent 70%); animation-delay: -6s; animation-duration: 22s; }
+  .blob-3 { width: 38vmax; height: 38vmax; left: 18vw; bottom: -16vmax; background: radial-gradient(circle, #c084fc, transparent 70%); animation-delay: -11s; animation-duration: 25s; }
+  @keyframes drift {
+    0%   { transform: translate(0, 0) scale(1); }
+    50%  { transform: translate(4vmax, -3vmax) scale(1.12); }
+    100% { transform: translate(-3vmax, 4vmax) scale(0.94); }
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 640px; margin: 0 auto; padding: clamp(16px, 4vw, 32px); padding-bottom: 48px; }
+
+  /* ---- 头部 ---- */
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 48px; height: 48px; border-radius: 14px; flex: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    display: grid; place-items: center; font-size: 24px; color: #fff;
+    box-shadow: 0 6px 18px rgba(139, 92, 246, 0.4);
+    animation: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  h1 { font-size: clamp(20px, 4.5vw, 26px); letter-spacing: 1px; }
+  .subtitle { font-size: 12.5px; color: var(--text-soft); margin-top: 2px; }
+  .icon-btn {
+    width: 46px; height: 46px; border-radius: 14px; border: 1px solid var(--glass-border);
+    background: var(--glass-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    font-size: 20px; cursor: pointer; color: var(--text);
+    transition: transform 0.25s, box-shadow 0.25s; flex: none;
+  }
+  .icon-btn:hover { transform: rotate(60deg) scale(1.06); box-shadow: var(--shadow); }
+
+  /* ---- 毛玻璃卡片 ---- */
+  .glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    box-shadow: var(--shadow);
+  }
+
+  /* ---- 模式切换 ---- */
+  .tabs {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; padding: 6px;
+    margin-bottom: 18px; animation: rise 0.55s ease both;
+  }
+  .tab {
+    padding: 13px 8px; border: none; border-radius: 16px; cursor: pointer;
+    background: transparent; color: var(--text-soft);
+    font-size: 15px; font-weight: 600; font-family: inherit;
+    transition: all 0.3s; min-height: 46px;
+  }
+  .tab.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff; box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+  }
+  @keyframes rise { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .card { padding: clamp(18px, 4vw, 26px); margin-bottom: 16px; animation: rise 0.55s ease both; }
+  .card.hidden { display: none; }
+  .card > * { animation: fadeUp 0.4s ease both; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13.5px; font-weight: 600; color: var(--text-soft); margin-bottom: 7px; }
+  .input-row { display: flex; align-items: center; gap: 8px; }
+  input[type="number"], input[type="text"] {
+    width: 100%; padding: 13px 15px; font-size: 17px; font-family: inherit;
+    border: 1.5px solid rgba(120, 120, 180, 0.22); border-radius: 14px;
+    background: rgba(255, 255, 255, 0.6); color: var(--text); outline: none;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); }
+  .unit-tag {
+    flex: none; font-size: 14px; font-weight: 700; color: var(--accent);
+    background: rgba(99, 102, 241, 0.12); padding: 10px 14px; border-radius: 12px; white-space: nowrap;
+  }
+
+  /* ---- 结果区 ---- */
+  .result {
+    margin-top: 6px; padding: 20px; border-radius: 18px; text-align: center;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(236, 72, 153, 0.12));
+    border: 1px solid rgba(99, 102, 241, 0.2);
+  }
+  .result-label { font-size: 13px; color: var(--text-soft); font-weight: 600; letter-spacing: 1px; }
+  .result-value {
+    font-size: clamp(34px, 8vw, 46px); font-weight: 800; margin: 6px 0 2px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-3));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    font-variant-numeric: tabular-nums;
+  }
+  .result-unit { font-size: 14px; color: var(--text-soft); }
+  .sub-result { margin-top: 14px; padding-top: 14px; border-top: 1px dashed rgba(120, 120, 180, 0.3); font-size: 14px; color: var(--text-soft); line-height: 1.9; }
+  .sub-result b { color: var(--text); font-size: 16px; }
+
+  .divider { display: flex; align-items: center; gap: 10px; margin: 20px 0 16px; color: var(--text-soft); font-size: 12.5px; font-weight: 600; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: rgba(120, 120, 180, 0.25); }
+
+  /* ---- 进度条 ---- */
+  .bar-track {
+    height: 14px; border-radius: 99px; overflow: hidden; margin-top: 12px;
+    background: rgba(120, 120, 180, 0.18);
+  }
+  .bar-fill {
+    height: 100%; width: 0%; border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
+    background-size: 200% 100%;
+    animation: shimmer 3s linear infinite;
+    transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .bar-text { font-size: 12.5px; color: var(--text-soft); margin-top: 6px; text-align: right; }
+  .hint { margin-top: 10px; font-size: 13px; padding: 10px 14px; border-radius: 12px; display: none; }
+  .hint.warn { display: block; background: rgba(245, 158, 11, 0.15); color: #92610a; }
+  .hint.ok { display: block; background: rgba(16, 185, 129, 0.14); color: #06603f; }
+
+  /* ---- 设置弹窗 ---- */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    background: rgba(30, 35, 64, 0.35); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-mask.open { display: flex; animation: fadeIn 0.25s ease both; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    width: 100%; max-width: 420px; padding: 26px; max-height: 88vh; overflow-y: auto;
+    animation: rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+    background: rgba(255, 255, 255, 0.85);
+  }
+  .modal h2 { font-size: 19px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
+  .close-btn { border: none; background: rgba(120,120,180,0.15); width: 34px; height: 34px; border-radius: 10px; font-size: 16px; cursor: pointer; color: var(--text-soft); }
+  .select-wrap { position: relative; }
+  select {
+    width: 100%; padding: 13px 15px; font-size: 16px; font-family: inherit; appearance: none;
+    border: 1.5px solid rgba(120, 120, 180, 0.22); border-radius: 14px;
+    background: rgba(255, 255, 255, 0.7); color: var(--text); outline: none; cursor: pointer;
+  }
+  .select-wrap::after { content: "▾"; position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--text-soft); pointer-events: none; }
+  .btn-primary {
+    width: 100%; margin-top: 6px; padding: 15px; border: none; border-radius: 16px; cursor: pointer;
+    font-size: 16px; font-weight: 700; color: #fff; font-family: inherit;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2), var(--accent-3));
+    background-size: 200% 100%; transition: background-position 0.4s, transform 0.2s, box-shadow 0.3s;
+    min-height: 50px;
+  }
+  .btn-primary:hover { background-position: 100% 0; transform: translateY(-2px); box-shadow: 0 8px 22px rgba(168, 85, 247, 0.45); }
+  .btn-primary:active { transform: scale(0.98); }
+  .custom-factor { display: none; }
+  .custom-factor.show { display: block; animation: fadeUp 0.3s ease both; }
+  .tip { font-size: 12px; color: var(--text-soft); margin-top: 6px; line-height: 1.6; }
+
+  footer { text-align: center; font-size: 12px; color: var(--text-soft); padding-top: 10px; }
+
+  @media (max-width: 480px) {
+    .result-value { font-size: 32px; }
+    .modal { padding: 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-blobs" aria-hidden="true">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+</div>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">⚡</div>
+      <div>
+        <h1>工作量计算器</h1>
+        <div class="subtitle">算清每小时该做多少，进度一目了然</div>
+      </div>
+    </div>
+    <button class="icon-btn" id="btnSettings" aria-label="打开设置" title="设置">⚙️</button>
+  </header>
+
+  <!-- 模式切换 -->
+  <div class="tabs glass" role="tablist">
+    <button class="tab active" id="tabA" role="tab" aria-selected="true">⏱ 按时间算</button>
+    <button class="tab" id="tabB" role="tab" aria-selected="false">📊 按进度算</button>
+  </div>
+
+  <!-- 模式A：根据要求工作量 + 干了的时间 -->
+  <section class="glass card" id="panelA" role="tabpanel">
+    <div class="field">
+      <label for="aTotal">要求工作量</label>
+      <div class="input-row">
+        <input type="number" id="aTotal" min="0" step="any" placeholder="例如 100" inputmode="decimal">
+        <span class="unit-tag" id="aUnitTag">条</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="aHours">总工作时长</label>
+      <div class="input-row">
+        <input type="number" id="aHours" min="0" step="any" inputmode="decimal">
+        <span class="unit-tag" id="aTimeTag">小时</span>
+      </div>
+    </div>
+
+    <div class="result">
+      <div class="result-label">每小时应做</div>
+      <div class="result-value" id="aPerHour">—</div>
+      <div class="result-unit" id="aPerHourUnit">条 / 小时</div>
+    </div>
+
+    <div class="divider">已干一段时间，应完成多少？</div>
+    <div class="field">
+      <label for="aDone">已干时长</label>
+      <div class="input-row">
+        <input type="number" id="aDone" min="0" step="any" placeholder="例如 3" inputmode="decimal">
+        <span class="unit-tag" id="aDoneTimeTag">小时</span>
+      </div>
+    </div>
+    <div class="result">
+      <div class="result-label">此时刻应完成</div>
+      <div class="result-value" id="aShouldDone">—</div>
+      <div class="result-unit" id="aShouldDoneUnit">条</div>
+      <div class="bar-track"><div class="bar-fill" id="aBar"></div></div>
+      <div class="bar-text" id="aBarText">0%</div>
+      <div class="hint" id="aHint"></div>
+    </div>
+  </section>
+
+  <!-- 模式B：根据要求工作量 + 已干工作量 -->
+  <section class="glass card hidden" id="panelB" role="tabpanel">
+    <div class="field">
+      <label for="bTotal">要求工作量</label>
+      <div class="input-row">
+        <input type="number" id="bTotal" min="0" step="any" placeholder="例如 100" inputmode="decimal">
+        <span class="unit-tag" id="bUnitTag">条</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="bDone">已完成工作量</label>
+      <div class="input-row">
+        <input type="number" id="bDone" min="0" step="any" placeholder="例如 40" inputmode="decimal">
+        <span class="unit-tag" id="bDoneTag">条</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="bHours">总工作时长</label>
+      <div class="input-row">
+        <input type="number" id="bHours" min="0" step="any" inputmode="decimal">
+        <span class="unit-tag" id="bTimeTag">小时</span>
+      </div>
+    </div>
+
+    <div class="result">
+      <div class="result-label">这个量应花费</div>
+      <div class="result-value" id="bTime">—</div>
+      <div class="result-unit" id="bTimeUnit">小时</div>
+      <div class="bar-track"><div class="bar-fill" id="bBar"></div></div>
+      <div class="bar-text" id="bBarText">0%</div>
+      <div class="sub-result" id="bExtra"></div>
+      <div class="hint" id="bHint"></div>
+    </div>
+  </section>
+
+  <footer>数据保存在本机浏览器 · 设置可自定义单位与默认时长</footer>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal glass" role="dialog" aria-modal="true" aria-label="设置">
+    <h2>⚙️ 设置 <button class="close-btn" id="btnClose" aria-label="关闭设置">✕</button></h2>
+    <div class="field">
+      <label for="setUnitName">工作量单位</label>
+      <input type="text" id="setUnitName" maxlength="6" placeholder="条">
+      <div class="tip">比如：条、件、单、页、个……</div>
+    </div>
+    <div class="field">
+      <label for="setTimeUnit">时间单位</label>
+      <div class="select-wrap">
+        <select id="setTimeUnit">
+          <option value="hour">小时</option>
+          <option value="minute">分钟</option>
+          <option value="custom">自定义</option>
+        </select>
+      </div>
+    </div>
+    <div class="field custom-factor" id="customFactorField">
+      <label for="setCustomName">自定义单位名称</label>
+      <input type="text" id="setCustomName" maxlength="6" placeholder="例如：班次">
+    </div>
+    <div class="field custom-factor" id="customFactorField2">
+      <label for="setCustomFactor">1 个自定义单位 = 多少小时？</label>
+      <input type="number" id="setCustomFactor" min="0" step="any" placeholder="例如 4">
+    </div>
+    <div class="field">
+      <label for="setDefaultHours">默认总工作时长（<span id="setHoursUnitLabel">小时</span>）</label>
+      <div class="input-row">
+        <input type="number" id="setDefaultHours" min="0" step="any" inputmode="decimal">
+        <span class="unit-tag" id="setHoursTag">小时</span>
+      </div>
+      <div class="tip">切换单位时，时长数值会自动换算。</div>
+    </div>
+    <button class="btn-primary" id="btnSave">保存设置</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- 状态（localStorage 持久化） ----------
+  var store = {
+    load: function () {
+      try { return JSON.parse(localStorage.getItem("workloadCalc") || "{}"); }
+      catch (e) { return {}; }
+    },
+    save: function (s) {
+      try { localStorage.setItem("workloadCalc", JSON.stringify(s)); } catch (e) {}
+    }
+  };
+  var settings = Object.assign({ unit: "条", timeUnit: "hour", customName: "", customFactor: "", defaultHours: 8 }, store.load());
+
+  function timeUnitName() {
+    if (settings.timeUnit === "minute") return "分钟";
+    if (settings.timeUnit === "custom") return settings.customName || "自定义";
+    return "小时";
+  }
+  // 1 个时间单位 = 多少小时
+  function unitFactor() {
+    if (settings.timeUnit === "minute") return 1 / 60;
+    if (settings.timeUnit === "custom") {
+      var f = parseFloat(settings.customFactor);
+      return (isFinite(f) && f > 0) ? f : 1;
+    }
+    return 1;
+  }
+  function fmt(n, digits) {
+    if (!isFinite(n)) return "—";
+    var d = digits === undefined ? 2 : digits;
+    var v = Math.round(n * Math.pow(10, d)) / Math.pow(10, d);
+    if (v % 1 === 0) return String(v);
+    return String(v);
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    aTotal: $("aTotal"), aHours: $("aHours"), aDone: $("aDone"),
+    aPerHour: $("aPerHour"), aPerHourUnit: $("aPerHourUnit"),
+    aShouldDone: $("aShouldDone"), aShouldDoneUnit: $("aShouldDoneUnit"),
+    aBar: $("aBar"), aBarText: $("aBarText"), aHint: $("aHint"),
+    bTotal: $("bTotal"), bDone: $("bDone"), bHours: $("bHours"),
+    bTime: $("bTime"), bTimeUnit: $("bTimeUnit"), bExtra: $("bExtra"),
+    bBar: $("bBar"), bBarText: $("bBarText"), bHint: $("bHint")
+  };
+
+  // ---------- 数字滚动动画 ----------
+  function animateValue(el, target) {
+    var from = parseFloat(el.dataset.v || "0") || 0;
+    if (!isFinite(target)) { el.textContent = "—"; el.dataset.v = "0"; return; }
+    if (Math.abs(target - from) < 1e-9) { el.textContent = fmt(target); el.dataset.v = target; return; }
+    var start = null, dur = 500;
+    function step(ts) {
+      if (!start) start = ts;
+      var p = Math.min((ts - start) / dur, 1);
+      var e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(from + (target - from) * e);
+      if (p < 1) requestAnimationFrame(step);
+      else el.dataset.v = target;
+    }
+    requestAnimationFrame(step);
+  }
+
+  function setBar(bar, text, ratio) {
+    var pct = isFinite(ratio) ? Math.max(0, Math.min(ratio * 100, 100)) : 0;
+    bar.style.width = pct + "%";
+    text.textContent = isFinite(ratio) ? fmt(pct, 1) + "%" : "—";
+  }
+
+  // ---------- 模式A ----------
+  function calcA() {
+    var total = parseFloat(els.aTotal.value);
+    var hours = parseFloat(els.aHours.value);
+    var doneT = parseFloat(els.aDone.value);
+    els.aHint.className = "hint";
+
+    if (isFinite(total) && isFinite(hours) && hours > 0 && total >= 0) {
+      animateValue(els.aPerHour, total / hours);
+      els.aPerHourUnit.textContent = settings.unit + " / " + timeUnitName();
+    } else {
+      animateValue(els.aPerHour, NaN);
+      els.aPerHourUnit.textContent = settings.unit + " / " + timeUnitName();
+    }
+
+    if (isFinite(total) && isFinite(hours) && hours > 0 && isFinite(doneT) && doneT >= 0) {
+      var should = total * (doneT / hours);
+      animateValue(els.aShouldDone, should);
+      els.aShouldDoneUnit.textContent = settings.unit;
+      var ratio = doneT / hours;
+      setBar(els.aBar, els.aBarText, ratio);
+      if (ratio > 1.001) {
+        els.aHint.className = "hint warn";
+        els.aHint.textContent = "⚠️ 已干时长超过总工作时长，请注意进度";
+      } else if (ratio > 0.999) {
+        els.aHint.className = "hint ok";
+        els.aHint.textContent = "🎉 时间到！应完成全部 " + fmt(total) + " " + settings.unit;
+      }    } else {
+      animateValue(els.aShouldDone, NaN);
+      els.aShouldDoneUnit.textContent = settings.unit;
+      setBar(els.aBar, els.aBarText, NaN);
+    }
+  }
+
+  // ---------- 模式B ----------
+  function calcB() {
+    var total = parseFloat(els.bTotal.value);
+    var done = parseFloat(els.bDone.value);
+    var hours = parseFloat(els.bHours.value);
+    els.bHint.className = "hint";
+    els.bExtra.innerHTML = "";
+
+    if (isFinite(total) && total > 0 && isFinite(hours) && hours > 0 && isFinite(done) && done >= 0) {
+      var needHours = hours * (done / total);
+      animateValue(els.bTime, needHours);
+      els.bTimeUnit.textContent = timeUnitName();
+      setBar(els.bBar, els.bBarText, done / total);
+
+      var remain = total - done;
+      els.bExtra.innerHTML = "";
+      var mk = function (text, bold) {
+        var node = document.createElement(bold ? "b" : "span");
+        node.textContent = text;
+        return node;
+      };
+      if (remain > 0) {
+        els.bExtra.appendChild(mk("还剩 ", false));
+        els.bExtra.appendChild(mk(fmt(remain) + " " + settings.unit, true));
+        els.bExtra.appendChild(mk("，预计还需 ", false));
+        els.bExtra.appendChild(mk(fmt(hours * (remain / total)) + " " + timeUnitName(), true));
+      } else {
+        els.bExtra.appendChild(mk("🎉 已全部完成！", false));
+      }
+      els.bExtra.appendChild(document.createElement("br"));
+      els.bExtra.appendChild(mk("即每小时应做 ", false));
+      els.bExtra.appendChild(mk(fmt(total / hours) + " " + settings.unit, true));
+    } else {
+      animateValue(els.bTime, NaN);
+      els.bTimeUnit.textContent = timeUnitName();
+      setBar(els.bBar, els.bBarText, NaN);
+    }
+  }
+
+  function applyUnitTags() {
+    var u = settings.unit, t = timeUnitName();
+    $("aUnitTag").textContent = u; $("bUnitTag").textContent = u; $("bDoneTag").textContent = u;
+    $("aTimeTag").textContent = t; $("bTimeTag").textContent = t; $("aDoneTimeTag").textContent = t;
+    calcA(); calcB();
+  }
+
+  function applyDefaults() {
+    var shown = settings.defaultHours / unitFactor();
+    els.aHours.value = fmt(shown);
+    els.bHours.value = fmt(shown);
+  }
+
+  // ---------- Tab 切换 ----------
+  function switchTab(isA) {
+    $("tabA").classList.toggle("active", isA);
+    $("tabB").classList.toggle("active", !isA);
+    $("tabA").setAttribute("aria-selected", isA);
+    $("tabB").setAttribute("aria-selected", !isA);
+    $("panelA").classList.toggle("hidden", !isA);
+    $("panelB").classList.toggle("hidden", isA);
+    if (isA) { $("panelA").style.animation = "none"; void $("panelA").offsetWidth; $("panelA").style.animation = ""; }
+    else { $("panelB").style.animation = "none"; void $("panelB").offsetWidth; $("panelB").style.animation = ""; }
+  }
+  $("tabA").addEventListener("click", function () { switchTab(true); });
+  $("tabB").addEventListener("click", function () { switchTab(false); });
+
+  // ---------- 设置弹窗 ----------
+  var mask = $("modalMask");
+  function openModal() {
+    $("setUnitName").value = settings.unit;
+    $("setTimeUnit").value = settings.timeUnit;
+    $("setCustomName").value = settings.customName;
+    $("setCustomFactor").value = settings.customFactor;
+    $("setDefaultHours").value = fmt(settings.defaultHours / unitFactor());
+    syncCustomFields();
+    mask.classList.add("open");
+  }
+  function closeModal() { mask.classList.remove("open"); }
+  function syncCustomFields() {
+    var isCustom = $("setTimeUnit").value === "custom";
+    $("customFactorField").classList.toggle("show", isCustom);
+    $("customFactorField2").classList.toggle("show", isCustom);
+    var name = isCustom ? ($("setCustomName").value || "自定义") : ($("setTimeUnit").value === "minute" ? "分钟" : "小时");
+    $("setHoursUnitLabel").textContent = name;
+    $("setHoursTag").textContent = name;
+  }
+  $("btnSettings").addEventListener("click", openModal);
+  $("btnClose").addEventListener("click", closeModal);
+  mask.addEventListener("click", function (e) { if (e.target === mask) closeModal(); });
+  $("setTimeUnit").addEventListener("change", function () {
+    // 换算当前显示的默认时长到新单位
+    var curHours = settings.defaultHours;
+    var fromF = unitFactor();
+    var newF;
+    var v = this.value;
+    if (v === "minute") newF = 1 / 60;
+    else if (v === "custom") newF = (parseFloat($("setCustomFactor").value) || 1);
+    else newF = 1;
+    $("setDefaultHours").value = fmt(curHours / newF);
+    syncCustomFields();
+  });
+  $("setCustomFactor").addEventListener("input", function () {
+    if ($("setTimeUnit").value === "custom") syncCustomFields();
+  });
+  $("setCustomName").addEventListener("input", syncCustomFields);
+
+  $("btnSave").addEventListener("click", function () {
+    var oldF = unitFactor();
+    var newTimeUnit = $("setTimeUnit").value;
+    var newFactor;
+    if (newTimeUnit === "minute") newFactor = 1 / 60;
+    else if (newTimeUnit === "custom") newFactor = parseFloat($("setCustomFactor").value);
+    else newFactor = 1;
+    if (newTimeUnit === "custom" && !(isFinite(newFactor) && newFactor > 0)) {
+      $("setCustomFactor").focus();
+      return;
+    }
+    var shown = parseFloat($("setDefaultHours").value);
+    var newHours = isFinite(shown) && shown > 0 ? shown * newFactor : 8;
+
+    settings.unit = ($("setUnitName").value || "").trim() || "条";
+    settings.timeUnit = newTimeUnit;
+    settings.customName = ($("setCustomName").value || "").trim();
+    settings.customFactor = $("setCustomFactor").value;
+    settings.defaultHours = Math.round(newHours * 1000) / 1000;
+    store.save(settings);
+
+    $("setHoursUnitLabel").textContent = timeUnitName();
+    applyDefaults();
+    applyUnitTags();
+    closeModal();
+  });
+
+  // ---------- 输入监听 ----------
+  ["aTotal", "aHours", "aDone"].forEach(function (id) {
+    $(id).addEventListener("input", calcA);
+  });
+  ["bTotal", "bDone", "bHours"].forEach(function (id) {
+    $(id).addEventListener("input", calcB);
+  });
+
+  // ---------- 初始化 ----------
+  applyDefaults();
+  applyUnitTags();
+})();
+</script>
+</body>
+</html>
