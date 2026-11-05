@@ -2,7 +2,10 @@
 
 一个零依赖的单文件 HTML 小工具：算清每小时该做多少，进度一目了然。
 
-> 🎮 在线直接用：https://workload-calculator.app.workbuddy.host/?sharecode=2IAAPF72JG
+> **入口**
+> - 🌐 在线直接算：[WorkBuddy 托管版](https://workload-calculator.app.workbuddy.host/?sharecode=2IAAPF72JG)
+> - 🐙 GitHub Pages：[johnnysilverhandv.github.io/workload-calculator](https://johnnysilverhandv.github.io/workload-calculator/)
+> - 📦 离线下载：[v1.0.0 单文件 HTML](https://github.com/JohnnySilverhandV/workload-calculator/releases/download/v1.0.0/workload-calculator.html)
 
 ## 是什么
 
